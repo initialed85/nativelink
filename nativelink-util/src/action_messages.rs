@@ -63,6 +63,15 @@ impl OperationId {
             Self::String(name) => name,
         }
     }
+
+    // HACK(initialed85): treat the first half as the namespace and randomize the second half
+    #[must_use]
+    pub fn new_child(&self) -> Self {
+        let left = &self.to_string()[0..18];
+        let right = &Self::default().to_string()[19..];
+
+        Self::from(format!("{left}-{right}"))
+    }
 }
 
 impl Default for OperationId {

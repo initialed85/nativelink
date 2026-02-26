@@ -922,6 +922,24 @@ impl RunningActionImpl {
             ))
             .env_clear();
 
+        // HACK(initialed85) pass our invocation ID hack down through as env vars
+        // outside the hashing mechansim (to avoid cache invalidation)
+        command_builder.env(
+            "BAZEL_CACHE_KEY",
+            format!("BAZEL|{}", &self.operation_id.clone().into_string()[0..18]),
+        );
+        command_builder.env(
+            "BAZEL_INVOCATION_ID",
+            format!(
+                "{}-0000-000000000000",
+                &self.operation_id.clone().into_string()[0..18]
+            ),
+        );
+        command_builder.env(
+            "BAZEL_OPERATION_ID",
+            self.operation_id.clone().into_string(),
+        );
+        
         let requested_timeout = if self.action_info.timeout.is_zero() {
             self.running_actions_manager.max_action_timeout
         } else {

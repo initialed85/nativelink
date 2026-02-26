@@ -140,3 +140,51 @@ SPDX identifier: `FSL-1.1-Apache-2.0`.
 
 After the second anniversary of the date this version was made available, you may use this
 software under the Apache License, Version 2.0.
+
+## initialed85's hack notes
+
+```shell
+#
+# build
+#
+
+# watch code + build on macos-aarch64
+fd --glob '*.rs' . | entr -n -r -cc -s "cargo build"
+
+# code + build on linux-aarch64 (colima)
+fd --glob '*.rs' . | entr -n -r -cc -s "colima ssh -- cargo build --target-dir target-linux-aarch64"
+
+# watch code + transfer to linux-amd64
+fd | entr -n -r -cc -s "rsync -avzP --filter=':- .gitignore' -e 'ssh -p 22' . saetech@10.10.137.1:Projects/Home/nativelink/"
+
+# watch code + build on linux-amd64
+ssh saetech@10.10.137.1 -p 22
+cd Projects/Home/nativelink/
+fd | entr -n -r -cc -s "cargo build"
+
+#
+# run
+#
+
+# watch built binary + run cas on macos-aarch64
+cd deployment-examples/initialed85/cas
+find ../../../target/debug/nativelink | entr -n -r -cc -s "../../../target/debug/nativelink ./config.json5"
+
+# watch built binary + run scheduler on macos-aarch64
+cd deployment-examples/initialed85/scheduler
+find ../../../target/debug/nativelink | entr -n -r -cc -s "../../../target/debug/nativelink ./config.json5"
+
+# watch built binary + run worker on macos-aarch64
+cd deployment-examples/initialed85/worker-macos-aarch64
+find ../../../target/debug/nativelink | entr -n -r -cc -s "../../../target/debug/nativelink ./config.json5"
+
+# watch built binary + run worker on linux-aarch64
+cd deployment-examples/initialed85/worker-linux-aarch64
+colima ssh 
+find ../../../target-linux-aarch64/debug/nativelink | entr -n -r -cc -s "sudo ../../../target-linux-aarch64/debug/nativelink ./config.json5"
+
+# watch built binary + run worker on linux-amd64
+ssh saetech@10.10.137.1 -p 22
+cd Projects/Home/nativelink/deployment-examples/initialed85/worker-linux-amd64
+find ../../../target/debug/nativelink | entr -n -r -cc -s "sudo ../../../target/debug/nativelink ./config.json5"
+```

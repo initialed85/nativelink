@@ -757,12 +757,21 @@ impl<I: InstantWrapper, NowFn: Fn() -> I + Clone + Send + Sync> AwaitedActionDbI
             ActionUniqueQualifier::Cacheable(unique_key) => Some(unique_key.clone()),
             ActionUniqueQualifier::Uncacheable(_unique_key) => None,
         };
-        let operation_id = OperationId::default();
+
+        // HACK(initialed85): client_operation_id is derived from the invocation ID
+        let operation_id = client_operation_id.new_child();
+
+        debug!(
+            "client_operation_id: {:?} -> operation_id: {:?}",
+            client_operation_id, operation_id
+        );
+
         let awaited_action = AwaitedAction::new(
             operation_id.clone(),
             action_info.clone(),
             (self.now_fn)().now(),
         );
+
         debug_assert!(
             ActionStage::Queued == awaited_action.state().stage,
             "Expected action to be queued"

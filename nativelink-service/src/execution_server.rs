@@ -233,6 +233,7 @@ impl ExecutionServer {
     async fn inner_execute(
         &self,
         request: ExecuteRequest,
+        maybe_invocation_id: Option<&str>,
     ) -> Result<impl Stream<Item = Result<Operation, Status>> + Send + use<>, Error> {
         let instance_name = request.instance_name;
 
@@ -268,11 +269,35 @@ impl ExecutionServer {
             )
             .await?;
 
+        // HACK(initialed85): pass the invocation ID through as the operation ID
+        let operation_id = match maybe_invocation_id {
+            Some(invocation_id) => {
+                assert!(
+                    invocation_id.ends_with("0000-000000000000"),
+                    "invocation ID unexpectedly does not end with 0000-000000000000!"
+                );
+
+                OperationId::from(invocation_id).new_child()
+            }
+            None => OperationId::default(),
+        };
+
         let action_listener = instance_info
             .scheduler
-            .add_action(OperationId::default(), Arc::new(action_info))
+            .add_action(operation_id, Arc::new(action_info))
             .await
             .err_tip(|| "Failed to schedule task")?;
+
+        debug!(
+            "cloned_operation_id: {:?}",
+            action_listener
+                .as_state()
+                .await
+                .err_tip(|| "In ExecutionServer::inner_execute")?
+                .0
+                .client_operation_id
+                .clone()
+        );
 
         Ok(Box::pin(Self::to_execute_stream(
             &NativelinkOperationId::new(
@@ -333,11 +358,18 @@ impl Execution for ExecutionServer {
         &self,
         grpc_request: Request<ExecuteRequest>,
     ) -> Result<Response<ExecuteStream>, Status> {
+        let headers = grpc_request.metadata().clone().into_headers();
+
+        let maybe_invocation_id = match headers.get("x-invocation-id") {
+            Some(invocation_id_header) => invocation_id_header.to_str().ok(),
+            None => None,
+        };
+
         let request = grpc_request.into_inner();
 
         let digest_function = request.digest_function;
         let result = self
-            .inner_execute(request)
+            .inner_execute(request, maybe_invocation_id)
             .instrument(error_span!("execution_server_execute"))
             .with_context(
                 make_ctx_for_hash_func(digest_function)
