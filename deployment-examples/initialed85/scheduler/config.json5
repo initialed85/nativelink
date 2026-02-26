@@ -1,0 +1,81 @@
+{
+  stores: [
+    {
+      name: "GRPC_LOCAL_STORE",
+      grpc: {
+        instance_name: "",
+        endpoints: [
+          {
+            address: "grpc://localhost:50051",
+          },
+        ],
+        store_type: "cas",
+      },
+    },
+    {
+      name: "GRPC_LOCAL_AC_STORE",
+      grpc: {
+        instance_name: "",
+        endpoints: [
+          {
+            address: "grpc://localhost:50051",
+          },
+        ],
+        store_type: "ac",
+      },
+    },
+  ],
+  schedulers: [
+    {
+      name: "MAIN_SCHEDULER",
+      simple: {
+        supported_platform_properties: {
+          arch: "exact",
+          os: "exact",
+        },
+      },
+    },
+  ],
+  servers: [
+    {
+      listener: {
+        http: {
+          socket_address: "0.0.0.0:50052",
+        },
+      },
+      services: {
+        ac: [
+          {
+            ac_store: "GRPC_LOCAL_AC_STORE",
+          },
+        ],
+        execution: [
+          {
+            cas_store: "GRPC_LOCAL_STORE",
+            scheduler: "MAIN_SCHEDULER",
+          },
+        ],
+        capabilities: [
+          {
+            remote_execution: {
+              scheduler: "MAIN_SCHEDULER",
+            },
+          },
+        ],
+      },
+    },
+    {
+      listener: {
+        http: {
+          socket_address: "0.0.0.0:50061",
+        },
+      },
+      services: {
+        worker_api: {
+          scheduler: "MAIN_SCHEDULER",
+        },
+        health: {},
+      },
+    },
+  ],
+}

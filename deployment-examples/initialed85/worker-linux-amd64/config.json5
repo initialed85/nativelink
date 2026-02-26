@@ -1,0 +1,72 @@
+{
+  stores: [
+    {
+      name: "GRPC_LOCAL_STORE",
+      grpc: {
+        instance_name: "",
+        endpoints: [
+          {
+            address: "grpc://100.69.178.41:50051",
+          },
+        ],
+        store_type: "cas",
+      },
+    },
+    {
+      name: "GRPC_LOCAL_AC_STORE",
+      grpc: {
+        instance_name: "",
+        endpoints: [
+          {
+            address: "grpc://100.69.178.41:50051",
+          },
+        ],
+        store_type: "ac",
+      },
+    },
+    {
+      name: "WORKER_FAST_SLOW_STORE",
+      fast_slow: {
+        fast: {
+          filesystem: {
+            content_path: "/tmp/worker-data/content_path-cas",
+            temp_path: "/tmp/worker-data/tmp_path-cas",
+            eviction_policy: {
+              max_bytes: 10000000000,
+            },
+          },
+        },
+        fast_direction: "get",
+        slow: {
+          ref_store: {
+            name: "GRPC_LOCAL_STORE",
+          },
+        },
+      },
+    },
+  ],
+  workers: [
+    {
+      local: {
+        entrypoint: "/home/saetech/Projects/Home/nativelink/deployment-examples/initialed85/job-entrypoint.sh",
+        worker_api_endpoint: {
+          uri: "grpc://100.69.178.41:50061",
+        },
+        cas_fast_slow_store: "WORKER_FAST_SLOW_STORE",
+        upload_action_result: {
+          ac_store: "GRPC_LOCAL_AC_STORE",
+        },
+        work_directory: "/tmp/worker-data/work",
+        platform_properties: {
+          os: {
+            values: ["linux"],
+          },
+          arch: {
+            values: ["x86_64"],
+          },
+        },
+      },
+    },
+  ],
+  servers: [],
+}

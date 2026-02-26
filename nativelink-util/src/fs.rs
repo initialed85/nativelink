@@ -212,7 +212,7 @@ pub fn set_open_file_limit(desired_open_file_limit: usize) {
     // safe value.
     const MAX_SAFE_LIMIT: usize = 1 << 30; // ~1 billion
 
-    let new_open_file_limit = {
+    let mut new_open_file_limit = {
         match increase_nofile_limit(
             u64::try_from(desired_open_file_limit)
                 .expect("desired_open_file_limit is too large to convert to u64."),
@@ -231,6 +231,12 @@ pub fn set_open_file_limit(desired_open_file_limit: usize) {
             }
         }
     };
+
+    // TODO(initialed85): Came across this while debugging the worker on macOS... idk
+    if new_open_file_limit >= 0x7FFF_FFFF_FFFF_FFFF {
+        new_open_file_limit = DEFAULT_OPEN_FILE_LIMIT;
+    }
+
     // TODO(jaroeichler): Can we give a better estimate?
     if new_open_file_limit < DEFAULT_OPEN_FILE_LIMIT {
         warn!(

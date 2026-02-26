@@ -3,6 +3,7 @@ bazel-*
 target/
 nativelink-test/fuzz/target/
 .turbo/
+target-*/
 .vscode/
 .idea/
 .zed
