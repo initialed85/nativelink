@@ -1482,6 +1482,36 @@ pub struct GrpcEndpoint {
     /// If not set or 0, defaults to 20 seconds.
     #[serde(default, deserialize_with = "convert_duration_with_shellexpand")]
     pub http2_keepalive_timeout_s: u64,
+
+    /// HTTP/2 initial stream-level flow-control window, in bytes.
+    /// Mirrors `experimental_http2_initial_stream_window_size` on the server listener.
+    /// Default: hyper's default (65535).
+    #[serde(
+        default,
+        deserialize_with = "convert_optional_numeric_with_shellexpand"
+    )]
+    pub experimental_http2_initial_stream_window_size: Option<u32>,
+
+    /// HTTP/2 initial connection-level flow-control window, in bytes.
+    /// Mirrors `experimental_http2_initial_connection_window_size` on the server listener.
+    ///
+    /// This is the one that matters on a high-latency link: the window is how much data
+    /// the peer may have in flight before it must wait for an ack, so the ceiling is
+    /// window / rtt regardless of how much bandwidth there is. At the default 65535 over
+    /// a 350ms path that is ~187 KB/s.
+    /// Default: hyper's default (65535).
+    #[serde(
+        default,
+        deserialize_with = "convert_optional_numeric_with_shellexpand"
+    )]
+    pub experimental_http2_initial_connection_window_size: Option<u32>,
+
+    /// Let hyper size the connection window from the observed bandwidth-delay product
+    /// instead of pinning it. Mutually exclusive with the two settings above - hyper
+    /// panics if adaptive window is combined with an explicit connection window.
+    /// Default: false.
+    #[serde(default)]
+    pub experimental_http2_adaptive_window: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
