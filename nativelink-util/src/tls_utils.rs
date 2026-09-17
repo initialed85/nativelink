@@ -126,9 +126,39 @@ pub fn endpoint(endpoint_config: &GrpcEndpoint) -> Result<tonic::transport::Endp
         &endpoint_config.address,
         load_client_config(&endpoint_config.tls_config)?,
     )?;
+    let mut endpoint = endpoint;
+
     if let Some(concurrency_limit) = endpoint_config.concurrency_limit {
-        Ok(endpoint.concurrency_limit(concurrency_limit))
-    } else {
-        Ok(endpoint)
+        endpoint = endpoint.concurrency_limit(concurrency_limit);
     }
+
+    // Flow-control windows. Without these we get hyper's 65535-byte default, which caps a
+    // connection at window/rtt: fine on a LAN, ~187 KB/s against a peer 350ms away.
+    // adaptive_window and an explicit connection window are mutually exclusive in hyper,
+    // so prefer the explicit value when both are set rather than letting hyper panic.
+    let explicit_connection_window = endpoint_config
+        .experimental_http2_initial_connection_window_size
+        .is_some();
+
+    if let Some(size) = endpoint_config.experimental_http2_initial_stream_window_size {
+        endpoint = endpoint.initial_stream_window_size(Some(size));
+    }
+
+    if let Some(size) = endpoint_config.experimental_http2_initial_connection_window_size {
+        endpoint = endpoint.initial_connection_window_size(Some(size));
+    }
+
+    if let Some(adaptive) = endpoint_config.experimental_http2_adaptive_window {
+        if adaptive && explicit_connection_window {
+            warn!(
+                "experimental_http2_adaptive_window and \
+                 experimental_http2_initial_connection_window_size are mutually exclusive; \
+                 using the explicit connection window"
+            );
+        } else {
+            endpoint = endpoint.http2_adaptive_window(adaptive);
+        }
+    }
+
+    Ok(endpoint)
 }
