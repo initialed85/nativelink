@@ -165,8 +165,6 @@ pub fn endpoint(endpoint_config: &GrpcEndpoint) -> Result<tonic::transport::Endp
         .keep_alive_timeout(http2_keepalive_timeout)
         .keep_alive_while_idle(true);
 
-    let mut endpoint = endpoint;
-
     if let Some(concurrency_limit) = endpoint_config.concurrency_limit {
         endpoint = endpoint.concurrency_limit(concurrency_limit);
     }
