@@ -116,6 +116,25 @@ struct ActionResourceUsageSampler {
     handle: tokio::task::JoinHandle<SampledResourceUsage>,
 }
 
+/// Kill everything in the action's process group, not just its top-level
+/// process. Killing only the child leaves anything it spawned (a hung upload,
+/// a backgrounded daemon) running under the worker, holding whatever it had
+/// open, e.g. a lock file the next action on this worker then waits on
+/// forever. Call it before the child is reaped, so the pgid can't have been
+/// reused. Something that has left the group (setsid) still escapes; on Linux,
+/// `use_namespaces` covers that.
+#[cfg(target_family = "unix")]
+fn kill_action_process_group(pgid: Option<u32>) {
+    if let Some(pgid) = pgid.and_then(|pgid| libc::pid_t::try_from(pgid).ok()) {
+        // SAFETY: killpg is a plain syscall wrapper; pgid is the group this
+        // worker created for the action (process_group(0) at spawn).
+        unsafe { libc::killpg(pgid, libc::SIGKILL) };
+    }
+}
+
+#[cfg(not(target_family = "unix"))]
+const fn kill_action_process_group(_pgid: Option<u32>) {}
+
 #[cfg(target_os = "linux")]
 fn start_action_resource_usage_sampler(pgid: u32) -> ActionResourceUsageSampler {
     let (stop_tx, stop_rx) = watch::channel(false);
@@ -1959,17 +1978,23 @@ impl RunningActionImpl {
                 }
             }
 
-            // Run the action as its own process-group leader (pgid == child
-            // pid). The resource-usage sampler attributes memory by process
-            // group, so this keeps the whole action together — including
-            // processes reparented to the worker when an intermediate shell
-            // exits — and never conflates it with the worker's own group.
-            command_builder.process_group(0);
         }
+
+        // Run the action as its own process-group leader (pgid == child
+        // pid). The resource-usage sampler attributes memory by process
+        // group, so this keeps the whole action together — including
+        // processes reparented to the worker when an intermediate shell
+        // exits — and never conflates it with the worker's own group. It is
+        // also what lets a timeout or kill reach everything the action
+        // started (see kill_action_process_group), which is the only cleanup
+        // there is where namespaces aren't available (macOS).
+        #[cfg(target_family = "unix")]
+        command_builder.process_group(0);
 
         let mut child_process = command_builder
             .spawn()
             .err_tip(|| format!("Could not execute command {args:?}"))?;
+        let action_pgid = child_process.id();
         let mut stdout_reader = child_process
             .stdout
             .take()
@@ -2048,6 +2073,7 @@ impl RunningActionImpl {
                 () = &mut sleep_fut => {
                     self.running_actions_manager.metrics.task_timeouts.inc();
                     killed_action = true;
+                    kill_action_process_group(action_pgid);
                     if let Err(err) = child_process_guard.kill().await {
                         error!(
                             ?err,
@@ -2166,6 +2192,7 @@ impl RunningActionImpl {
                 },
                 _ = &mut kill_channel_rx => {
                     killed_action = true;
+                    kill_action_process_group(action_pgid);
                     if let Err(err) = child_process_guard.kill().await {
                         error!(
                             operation_id = ?self.operation_id,
